@@ -63,6 +63,8 @@ export interface SearchConfig {
   baseURL: string;
   recencyFilter: string;
   siteFilter: string;
+  /** Search provider: 'youcom' for You.com keyless free search, empty for default Moark flow. */
+  provider?: string;
 }
 
 export interface OcrConfig {
