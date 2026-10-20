@@ -44,6 +44,7 @@ const DEFAULT_CONFIG: Config = {
     baseURL: '',
     recencyFilter: '',
     siteFilter: '',
+    provider: '',
   },
   ocr: {
     provider: '',
@@ -293,6 +294,9 @@ function loadEnvConfig(): Partial<Config> {
   }
   if (process.env.COGITO_SEARCH_SITE_FILTER) {
     searchConfig.siteFilter = process.env.COGITO_SEARCH_SITE_FILTER;
+  }
+  if (process.env.COGITO_SEARCH_PROVIDER) {
+    searchConfig.provider = process.env.COGITO_SEARCH_PROVIDER;
   }
   if (Object.keys(searchConfig).length > 0) {
     envConfig.search = searchConfig as Config['search'];
