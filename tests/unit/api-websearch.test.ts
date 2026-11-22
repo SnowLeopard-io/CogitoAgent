@@ -14,6 +14,7 @@ function freshConfig() {
       baseURL: 'https://search.test.com/v1',
       recencyFilter: '',
       siteFilter: '',
+      provider: '',
     },
   };
 }
@@ -402,6 +403,121 @@ describe('api/webSearch.ts', () => {
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.content).toBe('你好世界');
+    });
+  });
+
+  describe('search - youcom provider', () => {
+    it('should call You.com Agents API when provider is youcom', async () => {
+      mockConfig.search.provider = 'youcom';
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [{ title: 't', url: 'u', description: 'd' }] }),
+      });
+
+      await search('test query');
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://api.you.com/v1/agents/search');
+      expect(init.method).toBe('POST');
+      expect(init.headers['User-Agent']).toBe('youdotcom-integration/snowleopard-io-cogitoagent');
+      // Keyless: no Authorization header
+      expect(init.headers.Authorization).toBeUndefined();
+      const body = JSON.parse(init.body);
+      expect(body.query).toBe('test query');
+      expect(body.max_results).toBe(10);
+    });
+
+    it('should not send Authorization header (keyless)', async () => {
+      mockConfig.search.provider = 'youcom';
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
+
+      await search('q');
+
+      const headers = fetchMock.mock.calls[0][1].headers;
+      expect(headers.Authorization).toBeUndefined();
+    });
+
+    it('should pass recencyFilter as freshness when configured', async () => {
+      mockConfig.search.provider = 'youcom';
+      mockConfig.search.recencyFilter = 'week';
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
+
+      await search('q');
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.freshness).toBe('week');
+    });
+
+    it('should return success with results on 200', async () => {
+      mockConfig.search.provider = 'youcom';
+      const responseData = { results: [{ title: 't', url: 'u', description: 'd' }] };
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => responseData,
+      });
+
+      const result = await search('query');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(responseData);
+    });
+
+    it('should return error on non-OK status', async () => {
+      mockConfig.search.provider = 'youcom';
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        text: async () => 'rate limited',
+      });
+
+      const result = await search('query');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('429');
+    });
+
+    it('should return error when fetch throws', async () => {
+      mockConfig.search.provider = 'youcom';
+      fetchMock.mockRejectedValueOnce(new Error('network failure'));
+
+      const result = await search('query');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('network failure');
+    });
+
+    it('should still respect search.enabled === false', async () => {
+      mockConfig.search.provider = 'youcom';
+      mockConfig.search.enabled = false;
+
+      const result = await search('query');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('搜索功能未启用');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to default flow when provider is not youcom', async () => {
+      mockConfig.search.provider = '';
+      mockConfig.search.baseURL = 'https://search.custom.com/v1';
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
+
+      await search('query');
+
+      const [url] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://search.custom.com/v1');
     });
   });
 });

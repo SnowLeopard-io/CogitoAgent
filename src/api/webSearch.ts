@@ -4,6 +4,59 @@
 
 import { loadConfig } from '../config.ts';
 
+/** You.com keyless free Agents API — 100 searches/day, IP-based, no API key. */
+const YOUCOM_SEARCH_URL = 'https://api.you.com/v1/agents/search';
+const YOUCOM_USER_AGENT = 'youdotcom-integration/snowleopard-io-cogitoagent';
+
+/**
+ * You.com keyless search via the free Agents API.
+ * No API key required (IP-based rate limit, 100 searches/day).
+ */
+async function youcomSearch(
+  content: string,
+  cfg: ReturnType<typeof loadConfig>,
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  const body: Record<string, unknown> = {
+    query: content,
+    max_results: 10,
+  };
+  // MINIMAL: the free Agents API supports a subset of filters; pass them when set.
+  if (cfg.search?.recencyFilter) {
+    body.freshness = cfg.search.recencyFilter;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(YOUCOM_SEARCH_URL, {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': YOUCOM_USER_AGENT,
+        },
+        method: 'POST',
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        return {
+          success: false,
+          error: `You.com 搜索请求失败 (${response.status}): ${response.statusText}\n响应: ${text.slice(0, 200)}`,
+        };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
 /**
  * 调用联网搜索
  * @param content - 搜索关键词
@@ -16,6 +69,11 @@ async function search(
   // 如果搜索未启用，直接返回
   if (!cfg.search || cfg.search.enabled === false) {
     return { success: false, error: '搜索功能未启用' };
+  }
+
+  // You.com keyless provider: opt-in via search.provider === 'youcom'.
+  if ((cfg.search.provider || '').toLowerCase() === 'youcom') {
+    return youcomSearch(content, cfg);
   }
 
   // 构建搜索 URL：优先用 search.baseURL。
