@@ -122,7 +122,7 @@
   },
   "overrides": {
     "image-size": "file:vendor/image-size",
-    "brace-expansion": "^5.0.9",
+    "brace-expansion": "^5.0.13",
     "js-yaml": "^4.3.2",
     "tar": "^7.4.3",
     "glob": "^13.0.6",
